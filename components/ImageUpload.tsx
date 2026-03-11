@@ -24,6 +24,7 @@ function uploadWithProgress(
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('filename', file.name);
 
     const relativePath = (file as any).webkitRelativePath as string | undefined;
     let targetFolder = folder;
