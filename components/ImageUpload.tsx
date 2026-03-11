@@ -15,32 +15,61 @@ interface ImageUploadProps {
   onUploadComplete: () => void;
 }
 
-function uploadWithProgress(
+/** Derive a URL-safe, lowercase slug from the original filename */
+function toCleanName(filename: string): string {
+  return filename
+    .replace(/\.[^/.]+$/, '')            // strip extension
+    .replace(/[^a-zA-Z0-9_-]/g, '-')    // replace special chars with dash
+    .replace(/-+/g, '-')                 // collapse consecutive dashes
+    .replace(/^-+|-+$/g, '')            // trim leading/trailing dashes
+    .toLowerCase();
+}
+
+async function uploadWithProgress(
   file: File,
   folder: string,
   onProgress: (pct: number) => void
 ): Promise<void> {
+  // Resolve target folder (handles webkitRelativePath for folder uploads)
+  const relativePath = (file as any).webkitRelativePath as string | undefined;
+  let targetFolder = folder;
+  if (relativePath) {
+    const parts = relativePath.split('/');
+    const subDirs = parts.slice(0, -1).join('/');
+    targetFolder = folder ? `${folder}/${subDirs}` : subDirs;
+  }
+
+  const cleanName = toCleanName(file.name);
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  // 1. Get a signed upload token from our server (tiny request — no file involved)
+  const sigRes = await fetch('/api/upload/sign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: targetFolder || undefined, public_id: cleanName || undefined, timestamp }),
+  });
+  if (!sigRes.ok) throw new Error('Failed to get upload signature');
+  const { signature, api_key, cloud_name } = await sigRes.json();
+
+  // 2. Upload the file directly to Cloudinary — bypasses Vercel's 4.5 MB body limit
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('filename', file.name);
-
-    const relativePath = (file as any).webkitRelativePath as string | undefined;
-    let targetFolder = folder;
-    if (relativePath) {
-      const parts = relativePath.split('/');
-      const subDirs = parts.slice(0, -1).join('/');
-      targetFolder = folder ? `${folder}/${subDirs}` : subDirs;
-    }
-    formData.append('folder', targetFolder);
+    formData.append('api_key', api_key);
+    formData.append('timestamp', String(timestamp));
+    formData.append('signature', signature);
+    formData.append('unique_filename', 'true');
+    formData.append('overwrite', 'false');
+    if (cleanName) formData.append('public_id', cleanName);
+    if (targetFolder) formData.append('folder', targetFolder);
 
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     });
-    xhr.addEventListener('load', () => (xhr.status < 300 ? resolve() : reject()));
-    xhr.addEventListener('error', reject);
-    xhr.open('POST', '/api/upload');
+    xhr.addEventListener('load', () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`))));
+    xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`);
     xhr.send(formData);
   });
 }
