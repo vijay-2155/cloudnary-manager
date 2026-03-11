@@ -15,7 +15,7 @@ import ClipboardHistory from '@/components/ClipboardHistory';
 import { useToast } from '@/components/Toast';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { CloudinaryResource, CloudinaryFolder } from '@/lib/types';
-import { FolderPlus, LayoutGrid, List, Sun, Moon, Clock } from 'lucide-react';
+import { FolderPlus, LayoutGrid, List, Sun, Moon, Clock, LogOut } from 'lucide-react';
 
 const PAGE_SIZE = 30;
 
@@ -207,6 +207,13 @@ export default function Home() {
               {/* Dark mode */}
               <button onClick={toggleDark} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors" title="Toggle dark mode">
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
               </button>
               <button onClick={() => setIsCreateFolderOpen(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-indigo-700">
                 <FolderPlus className="h-4 w-4" /> New Folder
